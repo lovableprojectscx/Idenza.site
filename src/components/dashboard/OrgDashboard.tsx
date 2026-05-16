@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Users, Globe, BarChart3, LogOut, Loader2,
   BrainCircuit, ArrowLeft, ExternalLink, TrendingUp, Activity,
-  Monitor, Smartphone, Link2, MapPin, Building2, Scan
+  Monitor, Smartphone, Link2, MapPin, Building2, Scan, MousePointerClick, Shield,
 } from 'lucide-react';
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -15,18 +15,20 @@ import AIChatPanel from '@/components/hub/AIChatPanel';
 import type { OrgContext } from '@/lib/ai';
 import idenzaLogo from '@/assets/idenza-logo.png';
 
-import { Lead, Project, DayData, Analytics, SiteSnapshot, parseBrief } from './types';
+import { Lead, TrackerEvent, Project, DayData, Analytics, SiteSnapshot, parseBrief, resolvePlan, PLAN_CONFIGS, PlanConfig } from './types';
 import { PRIMARY, statusConfig, shortDate } from './utils';
 import { SetupScreen } from './SetupScreen';
 import { LeadCard } from './LeadCard';
 import { ChartTooltip } from './ChartTooltip';
 import { BusinessBriefPanel } from './BusinessBriefPanel';
 import { WebAuditPanel } from './WebAuditPanel';
+import { BehaviorPanel } from './BehaviorPanel';
 
 export function OrgDashboard({ project, multiProject, onBack, onSignOut, userEmail }: {
   project: Project; multiProject: boolean;
   onBack: () => void; onSignOut: () => void; userEmail: string;
 }) {
+  const [plan, setPlan] = useState<PlanConfig>(PLAN_CONFIGS['free']);
   const [leads, setLeads] = useState<Lead[]>([]);
   const [chartData, setChartData] = useState<DayData[]>([]);
   const [analytics, setAnalytics] = useState<Analytics | null>(null);
@@ -34,7 +36,7 @@ export function OrgDashboard({ project, multiProject, onBack, onSignOut, userEma
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [liveProject, setLiveProject] = useState<Project>(project);
-  const [tab, setTab] = useState<'overview' | 'traffic' | 'leads' | 'empresa' | 'audit' | 'ai'>('overview');
+  const [tab, setTab] = useState<'overview' | 'traffic' | 'behavior' | 'leads' | 'empresa' | 'audit' | 'ai'>('overview');
 
   const trackerActive = liveProject.events_count > 0;
   const briefReady    = !!(liveProject.description && liveProject.description.trim().length > 10);
@@ -46,7 +48,7 @@ export function OrgDashboard({ project, multiProject, onBack, onSignOut, userEma
   const fetchStatus = useCallback(async (): Promise<Project> => {
     const [orgRes, leadsRes, eventsRes] = await Promise.all([
       supabase.from('organizations')
-        .select('name, slug, website_url, industry, city, description, token')
+        .select('name, slug, website_url, industry, city, description, token, plan_name')
         .eq('id', project.id).maybeSingle(),
       supabase.from('leads').select('*', { count: 'exact', head: true }).eq('organization_id', project.id),
       supabase.from('events').select('*', { count: 'exact', head: true }).eq('organization_id', project.id),
@@ -58,7 +60,10 @@ export function OrgDashboard({ project, multiProject, onBack, onSignOut, userEma
       id: project.id,
       leads_count:  leadsRes.count  ?? base.leads_count,
       events_count: eventsRes.count ?? base.events_count,
+      plan_name: orgRes.data?.plan_name ?? base.plan_name,
     };
+    const tier = resolvePlan(updated.plan_name);
+    setPlan(PLAN_CONFIGS[tier]);
     setLiveProject(updated);
     return updated;
   }, [project.id]);
@@ -70,13 +75,63 @@ export function OrgDashboard({ project, multiProject, onBack, onSignOut, userEma
     const allLeads = (leadsData as Lead[]) || [];
 
     const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
-    const [eventsRes, analyticsRes, snapshotsRes] = await Promise.all([
-      supabase.from('events').select('created_at').eq('organization_id', p.id).gte('created_at', thirtyDaysAgo),
+    const [richEventsRes, analyticsRes, snapshotsRes] = await Promise.all([
+      supabase.from('events')
+        .select('id, event_type, page_url, referrer, city, country, device, browser, session_id, metadata, created_at')
+        .eq('organization_id', p.id)
+        .gte('created_at', thirtyDaysAgo)
+        .order('created_at', { ascending: false })
+        .limit(5000),
       supabase.rpc('get_project_analytics', { p_org_id: p.id, p_days: 30 }),
       supabase.from('site_snapshots').select('*').eq('organization_id', p.id).order('captured_at', { ascending: false }),
     ]);
-    const allEvents = (eventsRes.data as { created_at: string }[]) || [];
-    if (analyticsRes.data) setAnalytics(analyticsRes.data as Analytics);
+    const richEvents = (richEventsRes.data as TrackerEvent[]) || [];
+
+    // Build enriched analytics from raw events
+    if (analyticsRes.data) {
+      const base = analyticsRes.data as Analytics;
+
+      // Browsers
+      const browserMap: Record<string, number> = {};
+      richEvents.forEach(e => { if (e.browser) browserMap[e.browser] = (browserMap[e.browser] || 0) + 1; });
+      const by_browser = Object.entries(browserMap).sort(([,a],[,b]) => b-a).map(([browser, count]) => ({ browser, count }));
+
+      // Event types
+      const etMap: Record<string, number> = {};
+      richEvents.forEach(e => { etMap[e.event_type] = (etMap[e.event_type] || 0) + 1; });
+      const by_event_type = Object.entries(etMap).sort(([,a],[,b]) => b-a).map(([event_type, count]) => ({ event_type, count }));
+
+      // Referrers
+      const refMap: Record<string, number> = {};
+      richEvents.filter(e => e.event_type === 'pageview').forEach(e => {
+        const ref = e.referrer?.trim() ? new URL(e.referrer).hostname.replace('www.', '') : 'directo';
+        refMap[ref] = (refMap[ref] || 0) + 1;
+      });
+      const by_referrer = Object.entries(refMap).sort(([,a],[,b]) => b-a).map(([referrer, count]) => ({ referrer, count }));
+
+      // Behavior metrics
+      const sessions = new Set(richEvents.map(e => e.session_id).filter(Boolean));
+      const sessionsWithScroll50 = new Set(richEvents.filter(e => e.event_type === 'scroll_50').map(e => e.session_id));
+      const sessionsWithScroll90 = new Set(richEvents.filter(e => e.event_type === 'scroll_90').map(e => e.session_id));
+      const totalSessions = sessions.size || 1;
+      const scroll_50_rate = (sessionsWithScroll50.size / totalSessions) * 100;
+      const scroll_90_rate = (sessionsWithScroll90.size / totalSessions) * 100;
+      const rage_click_count = richEvents.filter(e => e.event_type === 'rage_click').length;
+      const form_started_count = richEvents.filter(e => e.event_type === 'form_started').length;
+
+      // Avg time on page from session_leave metadata
+      const sessionLeaveEvents = richEvents.filter(e => e.event_type === 'session_leave' && e.metadata?.time_active_seconds);
+      const avg_time_on_page = sessionLeaveEvents.length > 0
+        ? Math.round(sessionLeaveEvents.reduce((s, e) => s + (e.metadata?.time_active_seconds ?? 0), 0) / sessionLeaveEvents.length)
+        : 0;
+
+      // Consent rate
+      const consentGranted = richEvents.filter(e => e.event_type === 'consent_granted').length;
+      const consentTotal = richEvents.filter(e => e.event_type === 'consent_granted' || e.event_type === 'consent_necessary_only').length;
+      const consent_rate = consentTotal > 0 ? (consentGranted / consentTotal) * 100 : 0;
+
+      setAnalytics({ ...base, by_browser, by_event_type, by_referrer, scroll_50_rate, scroll_90_rate, rage_click_count, form_started_count, avg_time_on_page, consent_rate });
+    }
     if (snapshotsRes.data) setSnapshots(snapshotsRes.data as SiteSnapshot[]);
 
     const days: DayData[] = Array.from({ length: 30 }, (_, i) => {
@@ -86,7 +141,7 @@ export function OrgDashboard({ project, multiProject, onBack, onSignOut, userEma
       return {
         date: iso, label: shortDate(iso),
         leads:  allLeads.filter(l => l.created_at.startsWith(iso)).length,
-        visits: allEvents.filter(e => e.created_at.startsWith(iso)).length,
+        visits: richEvents.filter(e => e.created_at.startsWith(iso) && e.event_type === 'pageview').length,
       };
     });
     setLeads(allLeads);
@@ -211,12 +266,13 @@ export function OrgDashboard({ project, multiProject, onBack, onSignOut, userEma
   }, [leads, chartData, liveProject, snapshots]);
 
   const TABS = [
-    { id: 'overview', label: 'Resumen',    icon: BarChart3,    active: 'text-primary border-primary/20 bg-primary/10' },
-    { id: 'traffic',  label: 'Tráfico',    icon: Globe,        active: 'text-[#CCFF00] border-[#CCFF00]/20 bg-[#CCFF00]/10' },
-    { id: 'leads',    label: 'Leads',      icon: Users,        active: 'text-primary border-primary/20 bg-primary/10', count: leads.length > 0 ? leads.length : undefined },
-    { id: 'empresa',  label: 'Mi Empresa', icon: Building2,    active: 'text-violet-400 border-violet-400/20 bg-violet-400/10' },
-    { id: 'audit',    label: 'Auditoría',  icon: Scan,         active: 'text-amber-400 border-amber-400/20 bg-amber-400/10' },
-    { id: 'ai',       label: 'Asesor IA',  icon: BrainCircuit, active: 'text-primary border-primary/20 bg-primary/10' },
+    { id: 'overview',  label: 'Resumen',      icon: BarChart3,        active: 'text-primary border-primary/20 bg-primary/10' },
+    { id: 'traffic',   label: 'Tráfico',      icon: Globe,            active: 'text-[#CCFF00] border-[#CCFF00]/20 bg-[#CCFF00]/10' },
+    { id: 'behavior',  label: 'Comportamiento', icon: MousePointerClick, active: 'text-blue-400 border-blue-400/20 bg-blue-400/10' },
+    { id: 'leads',     label: 'Leads',        icon: Users,            active: 'text-primary border-primary/20 bg-primary/10', count: leads.length > 0 ? leads.length : undefined },
+    { id: 'empresa',   label: 'Mi Empresa',   icon: Building2,        active: 'text-violet-400 border-violet-400/20 bg-violet-400/10' },
+    { id: 'audit',     label: 'Auditoría',    icon: Scan,             active: 'text-amber-400 border-amber-400/20 bg-amber-400/10' },
+    { id: 'ai',        label: 'Asesor IA',    icon: BrainCircuit,     active: 'text-primary border-primary/20 bg-primary/10' },
   ] as const;
 
   return (
@@ -245,6 +301,11 @@ export function OrgDashboard({ project, multiProject, onBack, onSignOut, userEma
             )}
           </div>
           <div className="flex items-center gap-4">
+            {/* Plan badge */}
+            <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-[10px] font-mono" style={{ color: plan.color, borderColor: `${plan.color}30`, background: `${plan.color}10` }}>
+              <Shield size={10} />
+              {plan.label}
+            </div>
             <div className={`hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-[10px] font-mono transition-all ${
               isReady
                 ? 'text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border-emerald-500/20'
@@ -592,10 +653,22 @@ export function OrgDashboard({ project, multiProject, onBack, onSignOut, userEma
                 </motion.div>
               )}
 
+              {/* ─── COMPORTAMIENTO ─────────────────────────────────────────────── */}
+              {tab === 'behavior' && (
+                <motion.div key="behavior" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
+                  <BehaviorPanel analytics={analytics} plan={plan} />
+                </motion.div>
+              )}
+
               {/* ─── LEADS ─────────────────────────────────────────────────────── */}
               {tab === 'leads' && (
                 <motion.div key="leads" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-2">
-                  {leads.length === 0 ? (
+                  {!plan.features.leads ? (
+                    <div className="text-center py-24">
+                      <Shield size={32} className="text-muted-foreground/30 mx-auto mb-4" />
+                      <p className="text-muted-foreground/40 font-mono text-sm">Captura de leads disponible desde el plan Starter.</p>
+                    </div>
+                  ) : leads.length === 0 ? (
                     <div className="text-center py-24">
                       <Users size={32} className="text-muted-foreground/30 mx-auto mb-4" />
                       <p className="text-muted-foreground/40 font-mono text-sm">Aún no hay leads.</p>
