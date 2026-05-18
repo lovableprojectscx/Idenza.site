@@ -4,12 +4,19 @@ import {
   FileText, Copy, Check, Save, Loader2, Sparkles,
   TrendingUp, Users, BarChart3, Clock, Download,
   Plus, Trash2, ExternalLink, RefreshCw, AlertCircle,
-  Upload, File, X as XIcon
+  Upload, File, X as XIcon, MousePointerClick, Monitor,
+  Smartphone, Link2, MapPin, Activity, AlertOctagon,
+  FormInput, Chrome
 } from 'lucide-react';
 import { supabase, supabaseAdmin, ADMIN_SECRET, TRACKER_HOST, isAdminConfigured } from '@/lib/supabase';
 import { toast } from 'sonner';
 import type { ClientRow, ProjectRow } from '@/pages/AdminHub';
 import { generateMonthlyReport, type MonthlyReport } from '@/lib/ai';
+import {
+  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
+  ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar
+} from 'recharts';
+import { ChartTooltip } from '@/components/dashboard/ChartTooltip';
 
 interface Props {
   client: ClientRow;
@@ -17,7 +24,7 @@ interface Props {
   onRefresh: () => void;
 }
 
-type Tab = 'panorama' | 'infraestructura' | 'reportes';
+type Tab = 'panorama' | 'trafico' | 'infraestructura' | 'reportes';
 
 const PLAN_OPTIONS = [
   { value: 'free',         label: 'Free — S/ 0/mes (cada 45d)', amount: 0 },
@@ -111,11 +118,30 @@ export function ClientFile({ client, onBack, onRefresh }: Props) {
   }, [proj]);
 
   // ── Analytics ────────────────────────────────────────────────────────────
-  const [analytics, setAnalytics] = useState<{
-    totalLeads: number; totalVisits: number; newLeads: number;
-    leadsByStatus: Record<string, number>; topPages: { page: string; count: number }[];
+  interface RichAnalytics {
+    totalLeads: number;
+    totalVisits: number;
+    newLeads: number;
+    leadsByStatus: Record<string, number>;
+    topPages: { page: string; count: number }[];
     recentLeads: { name: string | null; email: string | null; city: string | null; status: string; created_at: string }[];
-  } | null>(null);
+    by_browser: { browser: string; count: number }[];
+    by_event_type: { event_type: string; count: number }[];
+    by_referrer: { referrer: string; count: number }[];
+    scroll_50_rate: number;
+    scroll_90_rate: number;
+    rage_click_count: number;
+    form_started_count: number;
+    avg_time_on_page: number;
+    consent_rate: number;
+    unique_sessions: number;
+    by_hour: { hour: number; count: number }[];
+    by_device: { device: string; count: number }[];
+    by_country: { country: string; count: number }[];
+    top_pages: { url: string; count: number }[];
+    chartData: { date: string; label: string; leads: number; visits: number }[];
+  }
+  const [analytics, setAnalytics] = useState<RichAnalytics | null>(null);
   const [loadingAnalytics, setLoadingAnalytics] = useState(false);
 
   // ── Reports ──────────────────────────────────────────────────────────────
@@ -192,11 +218,19 @@ export function ClientFile({ client, onBack, onRefresh }: Props) {
     if (!proj) return;
     setLoadingAnalytics(true);
 
-    // Use secure RPC to bypass RLS and avoid dependency on service role keys in frontend
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+
+    // Fetch leads and analytics with public RPC, and load raw events securely with supabaseAdmin
     Promise.all([
       supabase.rpc('get_admin_leads', { p_admin_secret: ADMIN_SECRET, p_org_id: proj.id }),
       supabase.rpc('get_project_analytics', { p_org_id: proj.id, p_days: 30 }),
-    ]).then(([leadsRes, analyticsRes]) => {
+      supabaseAdmin.from('events')
+        .select('id, event_type, page_url, referrer, city, country, device, browser, session_id, metadata, created_at')
+        .eq('organization_id', proj.id)
+        .gte('created_at', thirtyDaysAgo)
+        .order('created_at', { ascending: false })
+        .limit(5000),
+    ]).then(([leadsRes, analyticsRes, richEventsRes]) => {
       const leads = ((leadsRes.data ?? []) as LeadAnalyticsRow[]);
       const byStatus = leads.reduce((acc: Record<string, number>, l: { status: string }) => {
         acc[l.status] = (acc[l.status] ?? 0) + 1;
@@ -207,16 +241,88 @@ export function ClientFile({ client, onBack, onRefresh }: Props) {
         return acc;
       }, {});
       const topPages = Object.entries(byPage).sort(([,a],[,b]) => b - a).slice(0,5).map(([page, count]) => ({ page, count }));
-      const analyticsData = analyticsRes.data ?? {};
+      
+      const richEvents = (richEventsRes.data as any[]) || [];
+      const analyticsData = (analyticsRes.data ?? {}) as any;
+
+      // Browsers
+      const browserMap: Record<string, number> = {};
+      richEvents.forEach(e => { if (e.browser) browserMap[e.browser] = (browserMap[e.browser] || 0) + 1; });
+      const by_browser = Object.entries(browserMap).sort(([,a],[,b]) => b-a).map(([browser, count]) => ({ browser, count }));
+
+      // Event types
+      const etMap: Record<string, number> = {};
+      richEvents.forEach(e => { etMap[e.event_type] = (etMap[e.event_type] || 0) + 1; });
+      const by_event_type = Object.entries(etMap).sort(([,a],[,b]) => b-a).map(([event_type, count]) => ({ event_type, count }));
+
+      // Referrers
+      const refMap: Record<string, number> = {};
+      richEvents.filter(e => e.event_type === 'pageview').forEach(e => {
+        const ref = e.referrer?.trim() ? new URL(e.referrer).hostname.replace('www.', '') : 'directo';
+        refMap[ref] = (refMap[ref] || 0) + 1;
+      });
+      const by_referrer = Object.entries(refMap).sort(([,a],[,b]) => b-a).map(([referrer, count]) => ({ referrer, count }));
+
+      // Behavior metrics
+      const sessions = new Set(richEvents.map(e => e.session_id).filter(Boolean));
+      const sessionsWithScroll50 = new Set(richEvents.filter(e => e.event_type === 'scroll_50').map(e => e.session_id));
+      const sessionsWithScroll90 = new Set(richEvents.filter(e => e.event_type === 'scroll_90').map(e => e.session_id));
+      const totalSessions = sessions.size || 1;
+      const scroll_50_rate = (sessionsWithScroll50.size / totalSessions) * 100;
+      const scroll_90_rate = (sessionsWithScroll90.size / totalSessions) * 100;
+      const rage_click_count = richEvents.filter(e => e.event_type === 'rage_click').length;
+      const form_started_count = richEvents.filter(e => e.event_type === 'form_started').length;
+
+      // Avg time on page from session_leave metadata
+      const sessionLeaveEvents = richEvents.filter(e => e.event_type === 'session_leave' && e.metadata?.time_active_seconds);
+      const avg_time_on_page = sessionLeaveEvents.length > 0
+        ? Math.round(sessionLeaveEvents.reduce((s, e) => s + (e.metadata?.time_active_seconds ?? 0), 0) / sessionLeaveEvents.length)
+        : 0;
+
+      // Consent rate
+      const consentGranted = richEvents.filter(e => e.event_type === 'consent_granted').length;
+      const consentTotal = richEvents.filter(e => e.event_type === 'consent_granted' || e.event_type === 'consent_necessary_only').length;
+      const consent_rate = consentTotal > 0 ? (consentGranted / consentTotal) * 100 : 0;
+
+      // 30-day historical chart data
+      const chartData = Array.from({ length: 30 }, (_, i) => {
+        const d = new Date();
+        d.setDate(d.getDate() - (29 - i));
+        const iso = d.toISOString().split('T')[0];
+        const label = new Date(iso).toLocaleDateString('es', { day: 'numeric', month: 'short' });
+        return {
+          date: iso,
+          label,
+          leads: leads.filter(l => l.created_at.startsWith(iso)).length,
+          visits: richEvents.filter(e => e.created_at.startsWith(iso) && e.event_type === 'pageview').length,
+        };
+      });
 
       setAnalytics({
         totalLeads:   leads.length,
         newLeads:     byStatus['new'] ?? 0,
-        totalVisits:  (analyticsData as { unique_sessions?: number }).unique_sessions ?? proj.events_count,
+        totalVisits:  analyticsData.unique_sessions ?? proj.events_count,
         leadsByStatus: byStatus,
         topPages,
         recentLeads: leads.slice(0, 8),
+        by_browser,
+        by_event_type,
+        by_referrer,
+        scroll_50_rate,
+        scroll_90_rate,
+        rage_click_count,
+        form_started_count,
+        avg_time_on_page,
+        consent_rate,
+        unique_sessions: analyticsData.unique_sessions ?? 0,
+        by_hour: analyticsData.by_hour ?? [],
+        by_device: analyticsData.by_device ?? [],
+        by_country: analyticsData.by_country ?? [],
+        top_pages: analyticsData.top_pages ?? [],
+        chartData,
       });
+    }).catch(e => {
+      console.error('Error loading admin analytics:', e);
     }).finally(() => setLoadingAnalytics(false));
   }, [proj?.id]);
 
@@ -420,6 +526,7 @@ export function ClientFile({ client, onBack, onRefresh }: Props) {
         <div className="flex gap-1 mt-5">
           {([
             { id: 'panorama',      label: 'Panorama',            icon: <BarChart3 size={13} /> },
+            { id: 'trafico',       label: 'Tráfico & Visitas',   icon: <Globe size={13} /> },
             { id: 'infraestructura', label: 'Infraestructura',   icon: <Server size={13} /> },
             { id: 'reportes',      label: 'Motor IA & Informes', icon: <Sparkles size={13} /> },
           ] as { id: Tab; label: string; icon: React.ReactNode }[]).map(t => (
@@ -517,6 +624,233 @@ export function ClientFile({ client, onBack, onRefresh }: Props) {
                     </div>
                   </div>
                 )}
+              </>
+            ) : (
+              <div className="flex items-center gap-2 text-muted-foreground text-sm"><AlertCircle size={15} /> Sin datos de analítica disponibles</div>
+            )}
+          </div>
+        )}
+
+        {/* ══ TRÁFICO & VISITAS ══ */}
+        {tab === 'trafico' && (
+          <div className="space-y-6 max-w-3xl">
+            {loadingAnalytics ? (
+              <div className="flex items-center gap-2 text-muted-foreground text-sm">
+                <Loader2 size={15} className="animate-spin" /> Cargando analítica de tráfico...
+              </div>
+            ) : analytics ? (
+              <>
+                {/* 30-Day Activity Chart */}
+                <div className="bg-card border border-border rounded-2xl p-4 sm:p-6">
+                  <div className="flex items-start justify-between gap-3 mb-5 flex-wrap">
+                    <div>
+                      <h3 className="font-bold text-foreground text-sm">Actividad — Últimos 30 días</h3>
+                      <p className="text-xs text-muted-foreground mt-0.5">Leads captados y visitas del sitio web del cliente</p>
+                    </div>
+                    <div className="flex items-center gap-4 text-[11px] text-muted-foreground shrink-0">
+                      <button
+                        onClick={() => {
+                          const url = `${window.location.origin}/t/${proj.token}`;
+                          navigator.clipboard.writeText(url);
+                          toast.success('Enlace del tracker copiado al portapapeles');
+                        }}
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-primary/10 text-primary hover:bg-primary/20 rounded-lg transition-colors font-medium border border-primary/20 mr-2"
+                        title="Copiar enlace mágico para el cliente"
+                      >
+                        <Copy size={12} /> Copiar Enlace Tracker
+                      </button>
+                      <span className="flex items-center gap-1.5"><span className="w-3 h-0.5 rounded inline-block bg-primary" />Leads</span>
+                      <span className="flex items-center gap-1.5"><span className="w-3 h-0.5 rounded bg-blue-400 inline-block" />Visitas</span>
+                    </div>
+                  </div>
+                  <ResponsiveContainer width="100%" height={200}>
+                    <AreaChart data={analytics.chartData} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
+                      <defs>
+                        <linearGradient id="gradLeadsAdmin" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%"  stopColor="#7B2CBF" stopOpacity={0.25} />
+                          <stop offset="95%" stopColor="#7B2CBF" stopOpacity={0} />
+                        </linearGradient>
+                        <linearGradient id="gradVisitsAdmin" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%"  stopColor="#3b82f6" stopOpacity={0.2} />
+                          <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.03)" vertical={false} />
+                      <XAxis dataKey="label" tick={{ fontSize: 9, fill: 'rgba(100,116,139,0.7)' }} tickLine={false} axisLine={false} interval={4} />
+                      <YAxis tick={{ fontSize: 10, fill: 'rgba(100,116,139,0.7)' }} tickLine={false} axisLine={false} allowDecimals={false} />
+                      <Tooltip content={<ChartTooltip />} />
+                      <Area type="monotone" dataKey="visits" name="Visitas" stroke="#3b82f6" strokeWidth={1.5} strokeOpacity={0.6} fill="url(#gradVisitsAdmin)" dot={false} />
+                      <Area type="monotone" dataKey="leads"  name="Leads"   stroke="#7B2CBF" strokeWidth={2} fill="url(#gradLeadsAdmin)" dot={false} activeDot={{ r: 4, fill: '#7B2CBF' }} />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+
+                {/* KPI stats */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  {[
+                    { label: 'Sesiones únicas (30d)', value: analytics.unique_sessions, color: 'text-sky-400' },
+                    { label: 'Scroll 50% (depth)', value: `${analytics.scroll_50_rate.toFixed(0)}%`, color: 'text-[#CCFF00]' },
+                    { label: 'Scroll 90% (depth)', value: `${analytics.scroll_90_rate.toFixed(0)}%`, color: 'text-primary' },
+                    { label: 'Rage Clicks', value: analytics.rage_click_count, color: analytics.rage_click_count > 5 ? 'text-red-400' : 'text-muted-foreground' },
+                  ].map(s => (
+                    <div key={s.label} className="bg-card border border-border rounded-xl p-4">
+                      <div className={`text-2xl font-bold ${s.color}`}>{s.value}</div>
+                      <div className="text-[10px] text-muted-foreground mt-1">{s.label}</div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Additional grids */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                  {/* Traffic referrers */}
+                  <div className="bg-card border border-border rounded-xl p-4 sm:p-5">
+                    <div className="flex items-center gap-2 mb-1">
+                      <ExternalLink size={13} className="text-muted-foreground" />
+                      <div className="font-bold text-foreground/80 text-sm">Origen del tráfico</div>
+                    </div>
+                    <div className="text-xs text-muted-foreground mb-4">¿De dónde vienen los visitantes?</div>
+                    {analytics.by_referrer.length === 0 ? (
+                      <div className="flex items-center justify-center h-24 text-muted-foreground/40 text-xs font-mono">Sin referrers detectados</div>
+                    ) : (
+                      <div className="space-y-2.5">
+                        {analytics.by_referrer.slice(0, 6).map((r, i) => {
+                          const max = analytics.by_referrer[0]?.count || 1;
+                          const pct = Math.round((r.count / max) * 100);
+                          const label = r.referrer === 'directo' ? '📍 Directo' : r.referrer;
+                          return (
+                            <div key={i}>
+                              <div className="flex items-center justify-between mb-1">
+                                <span className="text-xs text-foreground/70 truncate max-w-[160px]" title={r.referrer}>{label}</span>
+                                <span className="text-xs font-bold text-foreground/80 shrink-0 ml-2">{r.count}</span>
+                              </div>
+                              <div className="h-1.5 bg-border rounded-full overflow-hidden">
+                                <div className="h-full rounded-full bg-primary" style={{ width: `${pct}%` }} />
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Top pages */}
+                  <div className="bg-card border border-border rounded-xl p-4 sm:p-5">
+                    <div className="flex items-center gap-2 mb-1">
+                      <Link2 size={13} className="text-muted-foreground" />
+                      <div className="font-bold text-foreground/80 text-sm">Páginas más visitadas</div>
+                    </div>
+                    <div className="text-xs text-muted-foreground mb-4">Rutas de su web con más visitas</div>
+                    {analytics.top_pages.length === 0 ? (
+                      <div className="flex items-center justify-center h-24 text-muted-foreground/40 text-xs font-mono">Sin visitas detectadas</div>
+                    ) : (
+                      <div className="space-y-2.5">
+                        {analytics.top_pages.slice(0, 6).map((p, i) => {
+                          const max = analytics.top_pages[0]?.count || 1;
+                          const pct = Math.round((p.count / max) * 100);
+                          const path = p.url.replace(/^https?:\/\/[^/]+/, '') || '/';
+                          return (
+                            <div key={i}>
+                              <div className="flex items-center justify-between mb-1">
+                                <span className="text-xs text-foreground/70 truncate max-w-[160px]" title={p.url}>{path}</span>
+                                <span className="text-xs font-bold text-foreground/80 shrink-0 ml-2">{p.count}</span>
+                              </div>
+                              <div className="h-1.5 bg-border rounded-full overflow-hidden">
+                                <div className="h-full rounded-full bg-sky-400" style={{ width: `${pct}%` }} />
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                  {/* Browsers & Devices */}
+                  <div className="bg-card border border-border rounded-xl p-4 sm:p-5">
+                    <div className="flex items-center gap-2 mb-3">
+                      <Chrome size={13} className="text-muted-foreground" />
+                      <div className="font-bold text-foreground/80 text-sm">Browsers & Dispositivos</div>
+                    </div>
+                    {analytics.by_browser.length === 0 && analytics.by_device.length === 0 ? (
+                      <div className="text-muted-foreground/40 text-xs font-mono text-center py-6">Sin datos</div>
+                    ) : (
+                      <div className="space-y-4">
+                        <div>
+                          <div className="text-[10px] font-mono text-muted-foreground uppercase mb-2">Navegadores</div>
+                          <div className="space-y-1.5">
+                            {analytics.by_browser.slice(0, 4).map((b, i) => (
+                              <div key={i} className="flex items-center justify-between text-xs text-muted-foreground">
+                                <span>{b.browser}</span>
+                                <span className="font-bold text-foreground">{b.count}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                        <div className="border-t border-border/50 pt-3">
+                          <div className="text-[10px] font-mono text-muted-foreground uppercase mb-2">Dispositivos</div>
+                          <div className="space-y-1.5">
+                            {analytics.by_device.slice(0, 4).map((d, i) => {
+                              const Icon = d.device?.toLowerCase().includes('mobile') ? Smartphone : Monitor;
+                              return (
+                                <div key={i} className="flex items-center justify-between text-xs text-muted-foreground">
+                                  <span className="flex items-center gap-1"><Icon size={11} /> {d.device}</span>
+                                  <span className="font-bold text-foreground">{d.count}</span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Countries & Cities */}
+                  <div className="bg-card border border-border rounded-xl p-4 sm:p-5">
+                    <div className="flex items-center gap-2 mb-3">
+                      <Globe size={13} className="text-muted-foreground" />
+                      <div className="font-bold text-foreground/80 text-sm">Geolocalización (Países & Ciudades)</div>
+                    </div>
+                    {analytics.by_country.length === 0 ? (
+                      <div className="text-muted-foreground/40 text-xs font-mono text-center py-6">Sin datos de geolocalización</div>
+                    ) : (
+                      <div className="space-y-4">
+                        <div>
+                          <div className="text-[10px] font-mono text-muted-foreground uppercase mb-2">Top Países</div>
+                          <div className="space-y-1.5">
+                            {analytics.by_country.slice(0, 4).map((c, i) => (
+                              <div key={i} className="flex items-center justify-between text-xs text-muted-foreground">
+                                <span>{c.country || 'Desconocido'}</span>
+                                <span className="font-bold text-foreground">{c.count}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                        <div className="border-t border-border/50 pt-3">
+                          <div className="text-[10px] font-mono text-muted-foreground uppercase mb-2">Top Ciudades</div>
+                          <div className="space-y-1.5">
+                            {analytics.recentLeads.reduce((cities: { name: string; count: number }[], lead) => {
+                              if (lead.city) {
+                                const existing = cities.find(c => c.name === lead.city);
+                                if (existing) existing.count++;
+                                else cities.push({ name: lead.city, count: 1 });
+                              }
+                              return cities;
+                            }, []).sort((a, b) => b.count - a.count).slice(0, 4).map((c, i) => (
+                              <div key={i} className="flex items-center justify-between text-xs text-muted-foreground">
+                                <span className="flex items-center gap-1"><MapPin size={11} /> {c.name}</span>
+                                <span className="font-bold text-foreground">{c.count}</span>
+                              </div>
+                            ))}
+                            {analytics.recentLeads.filter(l => l.city).length === 0 && (
+                              <p className="text-[10px] text-muted-foreground/60 italic">Sin datos de ciudades recientes</p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
               </>
             ) : (
               <div className="flex items-center gap-2 text-muted-foreground text-sm"><AlertCircle size={15} /> Sin datos de analítica disponibles</div>

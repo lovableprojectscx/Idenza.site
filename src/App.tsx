@@ -58,6 +58,7 @@ const Comunidad       = lazy(() => import("./pages/Comunidad"));
 const PostView        = lazy(() => import("./pages/PostView"));
 const ForumTopic      = lazy(() => import("./pages/ForumTopic"));
 const ClientOnboarding = lazy(() => import("./pages/ClientOnboarding"));
+const TrackerView     = lazy(() => import("./pages/TrackerView"));
 const Regalos         = lazy(() => import("./pages/Regalos"));
 const Ecommerce       = lazy(() => import("./pages/Ecommerce"));
 import QRRedirect from "./pages/QRRedirect";
@@ -101,6 +102,7 @@ const App = () => (
                   <Route path="/planes"    element={<Planes />} />
                   <Route path="/crece"     element={<Crece />} />
                   <Route path="/onboarding/:token" element={<ClientOnboarding />} />
+                  <Route path="/t/:token"          element={<TrackerView />} />
                   <Route path="/regalos"           element={<Regalos />} />
                   <Route path="/ecommerce"         element={<Ecommerce />} />
 
