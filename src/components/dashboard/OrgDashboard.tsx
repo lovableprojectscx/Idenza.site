@@ -40,7 +40,7 @@ export function OrgDashboard({ project, multiProject, onBack, onSignOut, userEma
 
   const trackerActive = liveProject.events_count > 0;
   const briefReady    = !!(liveProject.description && liveProject.description.trim().length > 10);
-  const isReady       = trackerActive && briefReady;
+  const isReady       = trackerActive; // Dashboard unblocks as long as tracker is active
 
   const liveProjectRef = useRef(liveProject);
   useEffect(() => { liveProjectRef.current = liveProject; }, [liveProject]);
@@ -151,7 +151,7 @@ export function OrgDashboard({ project, multiProject, onBack, onSignOut, userEma
   const init = useCallback(async () => {
     setLoading(true);
     const fresh = await fetchStatus();
-    const ok = fresh.events_count > 0 && !!(fresh.description && fresh.description.trim().length > 10);
+    const ok = fresh.events_count > 0;
     if (ok) await loadAnalytics(fresh);
     setLoading(false);
   }, [fetchStatus, loadAnalytics]);
@@ -195,9 +195,8 @@ export function OrgDashboard({ project, multiProject, onBack, onSignOut, userEma
   const handleRefresh = async () => {
     setRefreshing(true);
     const fresh = await fetchStatus();
-    const freshOk = fresh.events_count > 0 && !!(fresh.description && fresh.description.trim().length > 10);
-    const wasReady = liveProjectRef.current.events_count > 0 &&
-      !!(liveProjectRef.current.description && liveProjectRef.current.description.trim().length > 10);
+    const freshOk = fresh.events_count > 0;
+    const wasReady = liveProjectRef.current.events_count > 0;
     if (freshOk && !wasReady) {
       setLoading(true);
       await loadAnalytics(fresh);
