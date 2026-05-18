@@ -7,7 +7,7 @@ import idenzaLogo from '@/assets/idenza-logo.png';
 
 const Login = () => {
   const navigate = useNavigate();
-  const { signIn, user } = useAuth();
+  const { signIn, user, isAdmin } = useAuth();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -16,8 +16,14 @@ const Login = () => {
   const [error, setError] = useState('');
 
   useEffect(() => {
-    if (user) navigate('/hub-admin', { replace: true });
-  }, [user, navigate]);
+    if (user) {
+      if (isAdmin) {
+        navigate('/hub-admin', { replace: true });
+      } else {
+        navigate('/hub/client', { replace: true });
+      }
+    }
+  }, [user, isAdmin, navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

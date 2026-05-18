@@ -59,6 +59,7 @@ const PostView        = lazy(() => import("./pages/PostView"));
 const ForumTopic      = lazy(() => import("./pages/ForumTopic"));
 const ClientOnboarding = lazy(() => import("./pages/ClientOnboarding"));
 const TrackerView     = lazy(() => import("./pages/TrackerView"));
+const ClientHub       = lazy(() => import("./pages/ClientHub"));
 const Regalos         = lazy(() => import("./pages/Regalos"));
 const Ecommerce       = lazy(() => import("./pages/Ecommerce"));
 import QRRedirect from "./pages/QRRedirect";
@@ -120,10 +121,17 @@ const App = () => (
                   <Route path="/hub/login"            element={<Login />} />
                   <Route path="/hub/forgot-password"  element={<ForgotPassword />} />
                   <Route path="/hub/update-password"  element={<UpdatePassword />} />
-                  {/* /hub/dashboard ya no existe — cualquier URL antigua redirige al CRM */}
-                  <Route path="/hub/dashboard"        element={<Navigate to="/hub-admin" replace />} />
+                  {/* /hub/dashboard ya no existe — cualquier URL antigua redirige al CRM cliente */}
+                  <Route path="/hub/dashboard"        element={<Navigate to="/hub/client" replace />} />
 
-                  {/* ── CRM ── */}
+                  {/* ── CRM Cliente ── */}
+                  <Route path="/hub/client" element={
+                    <ProtectedRoute>
+                      <ClientHub />
+                    </ProtectedRoute>
+                  } />
+
+                  {/* ── CRM Admin ── */}
                   <Route path="/hub-admin" element={
                     <ProtectedRoute requireAdmin>
                       <AdminHub />
