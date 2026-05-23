@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Onboarding E-Commerce — Idenza</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Inter',sans-serif;background:#0a0a0f;color:#e2e8f0;min-height:100vh}
+.hero{background:linear-gradient(135deg,#1a1a2e 0%,#16213e 50%,#0f3460 100%);padding:60px 20px;text-align:center;border-bottom:1px solid rgba(99,102,241,.3)}
+.logo{font-size:14px;font-weight:600;letter-spacing:3px;color:#6366f1;text-transform:uppercase;margin-bottom:20px}
+.hero h1{font-size:clamp(28px,5vw,48px);font-weight:700;background:linear-gradient(135deg,#fff 0%,#a5b4fc 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:16px}
+.hero p{color:#94a3b8;font-size:16px;max-width:500px;margin:0 auto}
+.progress-bar{background:#0a0a0f;padding:24px 20px;position:sticky;top:0;z-index:100;border-bottom:1px solid rgba(255,255,255,.05)}
+.progress-inner{max-width:900px;margin:0 auto}
+.progress-steps{display:flex;gap:6px;align-items:center}
+.step-dot{flex:1;height:3px;border-radius:99px;background:#1e293b;transition:.3s}
+.step-dot.active{background:#6366f1}
+.step-dot.done{background:#22c55e}
+.progress-label{font-size:12px;color:#64748b;margin-top:8px}
+.container{max-width:900px;margin:40px auto;padding:0 20px 80px}
+.section{background:#111827;border:1px solid #1e293b;border-radius:20px;margin-bottom:32px;overflow:hidden;transition:.3s}
+.section-header{padding:28px 32px;display:flex;align-items:center;gap:16px;cursor:pointer;user-select:none}
+.section-header:hover{background:rgba(99,102,241,.05)}
+.section-num{width:44px;height:44px;border-radius:12px;background:linear-gradient(135deg,#6366f1,#8b5cf6);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:16px;flex-shrink:0}
+.section-title{flex:1}
+.section-title h2{font-size:18px;font-weight:600;color:#f1f5f9}
+.section-title span{font-size:13px;color:#64748b;margin-top:2px;display:block}
+.chevron{color:#64748b;transition:.3s;font-size:20px}
+.section.open .chevron{transform:rotate(180deg)}
+.section-body{padding:0 32px 32px;display:none}
+.section.open .section-body{display:block}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+.grid-1{grid-column:span 2}
+@media(max-width:640px){.grid{grid-template-columns:1fr}.grid-1{grid-column:span 1}}
+.field{display:flex;flex-direction:column;gap:8px}
+.field label{font-size:13px;font-weight:500;color:#94a3b8;letter-spacing:.3px}
+.field label .req{color:#ef4444;margin-left:3px}
+.field input,.field textarea,.field select{background:#0d1117;border:1px solid #1e293b;border-radius:10px;padding:12px 16px;color:#f1f5f9;font-family:'Inter',sans-serif;font-size:14px;transition:.2s;outline:none;width:100%}
+.field input:focus,.field textarea:focus,.field select:focus{border-color:#6366f1;box-shadow:0 0 0 3px rgba(99,102,241,.15)}
+.field textarea{min-height:90px;resize:vertical}
+.field select option{background:#0d1117}
+.field .hint{font-size:12px;color:#475569}
+.upload-zone{border:2px dashed #1e293b;border-radius:12px;padding:32px;text-align:center;cursor:pointer;transition:.2s;position:relative}
+.upload-zone:hover{border-color:#6366f1;background:rgba(99,102,241,.05)}
+.upload-zone input{position:absolute;inset:0;opacity:0;cursor:pointer}
+.upload-zone .icon{font-size:32px;margin-bottom:8px}
+.upload-zone p{font-size:13px;color:#64748b}
+.upload-zone p strong{color:#6366f1}
+.radio-group{display:flex;gap:10px;flex-wrap:wrap}
+.radio-option{flex:1;min-width:120px}
+.radio-option input{display:none}
+.radio-option label{display:block;padding:12px 16px;border:1px solid #1e293b;border-radius:10px;text-align:center;cursor:pointer;font-size:13px;color:#94a3b8;transition:.2s}
+.radio-option input:checked+label{border-color:#6366f1;background:rgba(99,102,241,.1);color:#a5b4fc}
+.check-group{display:flex;gap:10px;flex-wrap:wrap}
+.check-option{position:relative}
+.check-option input{display:none}
+.check-option label{display:block;padding:10px 16px;border:1px solid #1e293b;border-radius:8px;cursor:pointer;font-size:13px;color:#94a3b8;transition:.2s}
+.check-option input:checked+label{border-color:#22c55e;background:rgba(34,197,94,.1);color:#86efac}
+.divider{height:1px;background:#1e293b;margin:24px 0}
+.submit-area{text-align:center;padding:40px 20px}
+.btn-submit{background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;border:none;padding:18px 48px;border-radius:14px;font-size:16px;font-weight:600;cursor:pointer;transition:.2s;font-family:'Inter',sans-serif;letter-spacing:.3px}
+.btn-submit:hover{transform:translateY(-2px);box-shadow:0 8px 32px rgba(99,102,241,.4)}
+.section-icon{margin-right:2px}
+.tag{display:inline-block;background:rgba(99,102,241,.15);color:#a5b4fc;border-radius:6px;padding:3px 10px;font-size:11px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;margin-left:8px}
+.social-row{display:grid;grid-template-columns:auto 1fr;align-items:center;gap:12px}
+.social-icon{width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px}
+.ig{background:linear-gradient(135deg,#f09433,#e6683c,#dc2743,#cc2366,#bc1888)}
+.fb{background:#1877f2}
+.tk{background:#010101;border:1px solid #333}
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <div class="logo">✦ Idenza — Onboarding</div>
+  <h1>Configuración de tu E-Commerce</h1>
+  <p>Completa este formulario para que podamos lanzar tu tienda online con todo configurado desde el primer día.</p>
+</div>
+
+<div class="progress-bar">
+  <div class="progress-inner">
+    <div class="progress-steps">
+      <div class="step-dot active" id="dot1"></div>
+      <div class="step-dot" id="dot2"></div>
+      <div class="step-dot" id="dot3"></div>
+      <div class="step-dot" id="dot4"></div>
+      <div class="step-dot" id="dot5"></div>
+      <div class="step-dot" id="dot6"></div>
+      <div class="step-dot" id="dot7"></div>
+    </div>
+    <div class="progress-label" id="progress-label">Sección 1 de 7 — Identidad de Marca</div>
+  </div>
+</div>
+
+<form id="onboarding-form" enctype="multipart/form-data">
+<div class="container">
+
+<!-- SECCIÓN 1 -->
+<div class="section open" data-section="1">
+  <div class="section-header" onclick="toggleSection(this)">
+    <div class="section-num">1</div>
+    <div class="section-title">
+      <h2>Identidad de Marca</h2>
+      <span>Nombre, promesa, diferencial y paleta visual</span>
+    </div>
+    <div class="chevron">▾</div>
+  </div>
+  <div class="section-body">
+    <div class="grid">
+      <div class="field grid-1">
+        <label>Nombre del negocio <span class="req">*</span></label>
+        <input type="text" name="brand_name" placeholder="Ej: Bocafest Food Box" required>
+      </div>
+      <div class="field grid-1">
+        <label>Promesa principal <span class="req">*</span></label>
+        <textarea name="brand_promise" placeholder="¿Qué le prometes a tu cliente? Ej: Flores frescas entregadas el mismo día con amor"></textarea>
+      </div>
+      <div class="field grid-1">
+        <label>Diferencial <span class="req">*</span></label>
+        <textarea name="brand_diff" placeholder="¿Por qué te eligen a ti y no a otro?"></textarea>
+      </div>
+      <div class="field">
+        <label>Tono de marca <span class="req">*</span></label>
+        <select name="brand_tone">
+          <option value="">Seleccionar...</option>
+          <option>Elegante y sofisticado</option>
+          <option>Cercano y amigable</option>
+          <option>Romántico y emocional</option>
+          <option>Profesional y serio</option>
+          <option>Divertido y juvenil</option>
+          <option>Minimalista y moderno</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Web de referencia de diseño</label>
+        <input type="url" name="ref_web" placeholder="https://ejemplo.com">
+        <span class="hint">Una web cuyo estilo te guste como referencia</span>
+      </div>
+      <div class="field">
+        <label>Paleta de colores</label>
+        <input type="text" name="colors" placeholder="Ej: #F5A0B5, #FFF8F0, #2D2D2D">
+        <span class="hint">Códigos hex o descripción (rosa pastel, blanco hueso...)</span>
+      </div>
+      <div class="field">
+        <label>Logo <span class="req">*</span></label>
+        <div class="upload-zone">
+          <input type="file" name="logo" accept=".png,.svg">
+          <div class="icon">🖼️</div>
+          <p><strong>Subir logo</strong> — PNG transparente o SVG</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- SECCIÓN 2 -->
+<div class="section" data-section="2">
+  <div class="section-header" onclick="toggleSection(this)">
+    <div class="section-num">2</div>
+    <div class="section-title">
+      <h2>Operaciones <span class="tag">Redes incluidas</span></h2>
+      <span>Contacto, horarios, equipo y redes sociales</span>
+    </div>
+    <div class="chevron">▾</div>
+  </div>
+  <div class="section-body">
+    <div class="grid">
+      <div class="field">
+        <label>Número de WhatsApp <span class="req">*</span></label>
+        <input type="tel" name="whatsapp" placeholder="+51 999 000 000">
+      </div>
+      <div class="field">
+        <label>Correo de pedidos <span class="req">*</span></label>
+        <input type="email" name="email_orders" placeholder="pedidos@tunegocio.com">
+      </div>
+      <div class="field">
+        <label>Horario de atención</label>
+        <input type="text" name="hours" placeholder="Ej: 9:00 am – 7:00 pm">
+      </div>
+      <div class="field">
+        <label>Días de atención</label>
+        <div class="check-group">
+          <div class="check-option"><input type="checkbox" name="dias" id="lun" value="Lunes"><label for="lun">Lun</label></div>
+          <div class="check-option"><input type="checkbox" name="dias" id="mar" value="Martes"><label for="mar">Mar</label></div>
+          <div class="check-option"><input type="checkbox" name="dias" id="mie" value="Miércoles"><label for="mie">Mié</label></div>
+          <div class="check-option"><input type="checkbox" name="dias" id="jue" value="Jueves"><label for="jue">Jue</label></div>
+          <div class="check-option"><input type="checkbox" name="dias" id="vie" value="Viernes"><label for="vie">Vie</label></div>
+          <div class="check-option"><input type="checkbox" name="dias" id="sab" value="Sábado"><label for="sab">Sáb</label></div>
+          <div class="check-option"><input type="checkbox" name="dias" id="dom" value="Domingo"><label for="dom">Dom</label></div>
+        </div>
+      </div>
+      <div class="field">
+        <label>¿Quién manejará el panel?</label>
+        <div class="radio-group">
+          <div class="radio-option"><input type="radio" name="panel_user" id="sola" value="Sola"><label for="sola">Solo yo</label></div>
+          <div class="radio-option"><input type="radio" name="panel_user" id="equipo" value="Equipo"><label for="equipo">Con equipo</label></div>
+        </div>
+      </div>
+      <div class="field">
+        <label>¿Notificaciones por WhatsApp además del correo?</label>
+        <div class="radio-group">
+          <div class="radio-option"><input type="radio" name="wa_notif" id="wasi" value="Sí"><label for="wasi">Sí</label></div>
+          <div class="radio-option"><input type="radio" name="wa_notif" id="wano" value="No"><label for="wano">No</label></div>
+        </div>
+      </div>
+
+      <div class="field grid-1"><div class="divider"></div></div>
+
+      <div class="field grid-1">
+        <label>Redes Sociales</label>
+      </div>
+      <div class="field">
+        <label>Instagram</label>
+        <div class="social-row">
+          <div class="social-icon ig">📷</div>
+          <input type="text" name="instagram" placeholder="@tunegocio">
+        </div>
+      </div>
+      <div class="field">
+        <label>Facebook</label>
+        <div class="social-row">
+          <div class="social-icon fb">📘</div>
+          <input type="text" name="facebook" placeholder="facebook.com/tunegocio">
+        </div>
+      </div>
+      <div class="field">
+        <label>TikTok <span style="color:#64748b;font-size:12px">(si tiene)</span></label>
+        <div class="social-row">
+          <div class="social-icon tk">🎵</div>
+          <input type="text" name="tiktok" placeholder="@tunegocio">
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- SECCIÓN 3 -->
+<div class="section" data-section="3">
+  <div class="section-header" onclick="toggleSection(this)">
+    <div class="section-num">3</div>
+    <div class="section-title">
+      <h2>Productos y Catálogo</h2>
+      <span>Categorías, variantes y fotos</span>
+    </div>
+    <div class="chevron">▾</div>
+  </div>
+  <div class="section-body">
+    <div class="grid">
+      <div class="field grid-1">
+        <label>Categorías que maneja <span class="req">*</span></label>
+        <textarea name="categories" placeholder="Ej: Ramos, Flores sueltas, Arreglos corporativos, Plantas"></textarea>
+      </div>
+      <div class="field">
+        <label>N° aproximado de productos</label>
+        <input type="number" name="product_count" placeholder="Ej: 30" min="1">
+      </div>
+      <div class="field">
+        <label>¿Los productos tienen variantes?</label>
+        <div class="radio-group">
+          <div class="radio-option"><input type="radio" name="variants" id="vsi" value="Sí"><label for="vsi">Sí (tamaño, color…)</label></div>
+          <div class="radio-option"><input type="radio" name="variants" id="vno" value="No"><label for="vno">No</label></div>
+        </div>
+      </div>
+      <div class="field grid-1">
+        <label>Fotos de productos</label>
+        <div class="upload-zone">
+          <input type="file" name="product_photos" multiple accept="image/*">
+          <div class="icon">📦</div>
+          <p><strong>Subir fotos</strong> o pega un link de Drive abajo</p>
+        </div>
+      </div>
+      <div class="field grid-1">
+        <label>Link de Drive (opcional)</label>
+        <input type="url" name="drive_link" placeholder="https://drive.google.com/...">
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- SECCIÓN 4 -->
+<div class="section" data-section="4">
+  <div class="section-header" onclick="toggleSection(this)">
+    <div class="section-num">4</div>
+    <div class="section-title">
+      <h2>Delivery</h2>
+      <span>Zonas de cobertura y horarios de corte</span>
+    </div>
+    <div class="chevron">▾</div>
+  </div>
+  <div class="section-body">
+    <div class="grid">
+      <div class="field grid-1">
+        <label>Distritos que cubre</label>
+        <textarea name="delivery_zones" placeholder="Ej: Miraflores, San Isidro, Barranco, Surco...&#10;(Lo configurarás tú en el panel de administración)"></textarea>
+      </div>
+      <div class="field">
+        <label>¿Horario límite para pedidos del mismo día?</label>
+        <div class="radio-group">
+          <div class="radio-option"><input type="radio" name="same_day" id="sdsi" value="Sí"><label for="sdsi">Sí</label></div>
+          <div class="radio-option"><input type="radio" name="same_day" id="sdno" value="No"><label for="sdno">No</label></div>
+        </div>
+      </div>
+      <div class="field" id="cutoff-field" style="display:none">
+        <label>Hora de corte</label>
+        <input type="time" name="cutoff_time">
+        <span class="hint">Pedidos recibidos después de esta hora serán para el día siguiente</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- SECCIÓN 5 -->
+<div class="section" data-section="5">
+  <div class="section-header" onclick="toggleSection(this)">
+    <div class="section-num">5</div>
+    <div class="section-title">
+      <h2>Pasarela de Pago — IZI</h2>
+      <span>Credenciales y métodos aceptados</span>
+    </div>
+    <div class="chevron">▾</div>
+  </div>
+  <div class="section-body">
+    <div class="grid">
+      <div class="field">
+        <label>API Key</label>
+        <input type="password" name="izi_api_key" placeholder="••••••••••••••••••••">
+        <span class="hint">Encriptada y almacenada de forma segura</span>
+      </div>
+      <div class="field">
+        <label>Merchant ID</label>
+        <input type="text" name="izi_merchant_id" placeholder="merchant_xxxxxxxx">
+      </div>
+      <div class="field">
+        <label>Ambiente</label>
+        <div class="radio-group">
+          <div class="radio-option"><input type="radio" name="izi_env" id="prod" value="produccion"><label for="prod">Producción</label></div>
+          <div class="radio-option"><input type="radio" name="izi_env" id="sand" value="sandbox"><label for="sand">Sandbox (pruebas)</label></div>
+        </div>
+      </div>
+      <div class="field">
+        <label>¿Acepta Yape / Plin también?</label>
+        <div class="radio-group">
+          <div class="radio-option"><input type="radio" name="yape_plin" id="ypsi" value="Sí"><label for="ypsi">Sí</label></div>
+          <div class="radio-option"><input type="radio" name="yape_plin" id="ypno" value="No"><label for="ypno">No</label></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- SECCIÓN 6 -->
+<div class="section" data-section="6">
+  <div class="section-header" onclick="toggleSection(this)">
+    <div class="section-num">6</div>
+    <div class="section-title">
+      <h2>Popups y Banners</h2>
+      <span>Bienvenida, descuentos e imágenes principales</span>
+    </div>
+    <div class="chevron">▾</div>
+  </div>
+  <div class="section-body">
+    <div class="grid">
+      <div class="field grid-1">
+        <label>¿Qué quieres en el popup de bienvenida?</label>
+        <textarea name="popup_content" placeholder="Ej: Descuento del 10% en tu primera compra, solo ingresa BIENVENIDO en tu pedido"></textarea>
+      </div>
+      <div class="field">
+        <label>¿Descuento en primera compra?</label>
+        <div class="radio-group">
+          <div class="radio-option"><input type="radio" name="first_discount" id="dcsi" value="Sí"><label for="dcsi">Sí</label></div>
+          <div class="radio-option"><input type="radio" name="first_discount" id="dcno" value="No"><label for="dcno">No</label></div>
+        </div>
+      </div>
+      <div class="field">
+        <label>¿Cuánto de descuento?</label>
+        <input type="text" name="discount_amount" placeholder="Ej: 10%, S/. 20, envío gratis">
+      </div>
+      <div class="field grid-1">
+        <label>Imagen del banner principal</label>
+        <div class="upload-zone">
+          <input type="file" name="banner_image" accept="image/*">
+          <div class="icon">🖼️</div>
+          <p><strong>Subir banner</strong> — Recomendado: 1920×600px</p>
+        </div>
+      </div>
+      <div class="field">
+        <label>¿Cada cuánto quieres cambiar el banner?</label>
+        <select name="banner_frequency">
+          <option value="">Seleccionar...</option>
+          <option>Semanalmente</option>
+          <option>Quincenalmente</option>
+          <option>Mensualmente</option>
+          <option>Por temporada / campaña</option>
+          <option>Yo lo actualizo cuando quiero</option>
+        </select>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- SECCIÓN 7 -->
+<div class="section" data-section="7">
+  <div class="section-header" onclick="toggleSection(this)">
+    <div class="section-num">7</div>
+    <div class="section-title">
+      <h2>Activos y Fotografía</h2>
+      <span>Fotos del negocio e imágenes para el diseño</span>
+    </div>
+    <div class="chevron">▾</div>
+  </div>
+  <div class="section-body">
+    <div class="grid">
+      <div class="field grid-1">
+        <label>Fotos del negocio o productos para el diseño</label>
+        <div class="upload-zone">
+          <input type="file" name="brand_photos" multiple accept="image/*,video/*">
+          <div class="icon">📸</div>
+          <p><strong>Subir fotos o videos</strong> — Local, interiores, productos, equipo</p>
+        </div>
+      </div>
+      <div class="field grid-1">
+        <label>¿Tienes fotógrafo o necesitas imágenes de referencia?</label>
+        <div class="radio-group">
+          <div class="radio-option"><input type="radio" name="photographer" id="ph1" value="Tengo fotógrafo"><label for="ph1">Tengo fotógrafo</label></div>
+          <div class="radio-option"><input type="radio" name="photographer" id="ph2" value="Necesito referencias"><label for="ph2">Necesito referencias</label></div>
+          <div class="radio-option"><input type="radio" name="photographer" id="ph3" value="Uso mis propias fotos"><label for="ph3">Uso mis propias fotos</label></div>
+        </div>
+      </div>
+      <div class="field grid-1">
+        <label>Notas adicionales</label>
+        <textarea name="notes" placeholder="Cualquier detalle extra que quieras que sepamos antes de empezar..." style="min-height:100px"></textarea>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="submit-area">
+  <p style="color:#64748b;font-size:14px;margin-bottom:20px">Al enviar confirmas que la información es correcta. Nuestro equipo la revisará en menos de 24 horas.</p>
+  <button type="submit" class="btn-submit">✦ Enviar Onboarding</button>
+</div>
+
+</div>
+</form>
+
+<script>
+function toggleSection(header){
+  const sec=header.parentElement;
+  const wasOpen=sec.classList.contains('open');
+  sec.classList.toggle('open',!wasOpen);
+  updateProgress();
+}
+
+function updateProgress(){
+  const sections=document.querySelectorAll('.section');
+  const labels=['Identidad de Marca','Operaciones','Productos y Catálogo','Delivery','Pasarela IZI','Popups y Banners','Activos'];
+  let current=1;
+  sections.forEach((s,i)=>{
+    if(s.classList.contains('open')) current=i+1;
+  });
+  for(let i=1;i<=7;i++){
+    const dot=document.getElementById('dot'+i);
+    if(i<current){dot.className='step-dot done';}
+    else if(i===current){dot.className='step-dot active';}
+    else{dot.className='step-dot';}
+  }
+  document.getElementById('progress-label').textContent=`Sección ${current} de 7 — ${labels[current-1]}`;
+}
+
+// Same-day cutoff toggle
+document.querySelectorAll('input[name="same_day"]').forEach(r=>{
+  r.addEventListener('change',()=>{
+    document.getElementById('cutoff-field').style.display=r.value==='Sí'&&r.checked?'flex':'none';
+  });
+});
+
+document.getElementById('onboarding-form').addEventListener('submit',function(e){
+  e.preventDefault();
+  const btn=this.querySelector('.btn-submit');
+  btn.textContent='✓ ¡Enviado con éxito!';
+  btn.style.background='linear-gradient(135deg,#22c55e,#16a34a)';
+  btn.disabled=true;
+  window.scrollTo({top:0,behavior:'smooth'});
+});
+
+updateProgress();
+</script>
+</body>
+</html>
