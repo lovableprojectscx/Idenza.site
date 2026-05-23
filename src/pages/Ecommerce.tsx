@@ -97,7 +97,7 @@ const PROJECTS: Project[] = [
     badge: "Plan Business · S/350",
     city: "Ayacucho, Perú",
     pills: ["Catálogo de regalos", "Pedidos WhatsApp", "Seguimiento"],
-    image: null,
+    image: "/store_placeholder.png",
     plan: "Business",
     built: [
       "Catálogo de regalos personalizados",
@@ -572,27 +572,37 @@ export default function Ecommerce() {
               {PROJECTS.map((proj, i) => (
                 <Reveal key={proj.id} delay={i * 80}>
                   <div
-                    className="proj-card rounded-2xl overflow-hidden cursor-pointer"
-                    style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)" }}
+                    className="proj-card group rounded-2xl overflow-hidden cursor-pointer"
+                    style={{ 
+                      background: "rgba(255,255,255,0.03)", 
+                      border: "1px solid rgba(255,255,255,0.07)",
+                      minHeight: "280px"
+                    }}
                     onClick={() => setActiveModal(proj)}
                   >
-                    <div className="flex flex-col md:flex-row">
+                    <div className="flex flex-col md:flex-row md:items-stretch min-h-[280px]">
                       {/* Image */}
-                      <div className="proj-img-wrap w-full md:w-56 h-44 md:h-auto shrink-0 overflow-hidden"
-                        style={{ minHeight: "160px" }}>
+                      <div className="proj-img-wrap w-full md:w-80 shrink-0 relative overflow-hidden md:self-stretch">
                         {proj.image ? (
-                          <img src={proj.image} alt={proj.name}
-                            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
+                          <div className="relative w-full h-full">
+                            <img src={proj.image} alt={proj.name}
+                              className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
+                            {/* Dark overlay to blend image into background, custom opacity for ID 3 */}
+                            <div 
+                              className="absolute inset-0 bg-[#080808] transition-opacity duration-300 group-hover:opacity-20"
+                              style={{ opacity: proj.id === 3 ? 0.25 : 0.45 }}
+                            />
+                          </div>
                         ) : (
                           <div className="w-full h-full flex items-center justify-center"
-                            style={{ background: "linear-gradient(135deg,#150f00,#0c0c0c)", minHeight: "160px" }}>
+                            style={{ background: "linear-gradient(135deg,#150f00,#0c0c0c)" }}>
                             <ShoppingBag size={36} className="text-[#ffb900]/25" />
                           </div>
                         )}
                       </div>
 
                       {/* Info */}
-                      <div className="flex-1 p-6 flex flex-col justify-between gap-4">
+                      <div className="flex-1 p-6 md:p-8 flex flex-col justify-center gap-4">
                         <div>
                           <div className="flex flex-wrap items-center gap-3 mb-3">
                             <span className="text-xs font-bold px-3 py-1 rounded-full"
