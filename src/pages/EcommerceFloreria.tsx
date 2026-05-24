@@ -331,7 +331,7 @@ function ProjectModal({ project, onClose }: { project: Project; onClose: () => v
 /* ─────────────────────────────────────────────
    MAIN PAGE
    ───────────────────────────────────────────── */
-export default function Ecommerce() {
+export default function EcommerceFloreria() {
   const WHATSAPP_URL = getWhatsAppUrl("Hola Jack, quiero información sobre el Kit Ecommerce");
   const [activeModal, setActiveModal] = useState<Project | null>(null);
 

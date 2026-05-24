@@ -22,7 +22,7 @@ const ConditionalSpotlight = () => {
   const { pathname } = useLocation();
   // Comunidad pages also benefit from the ambient canvas effect
   const isMarketing =
-    SPOTLIGHT_ROUTES.has(pathname) || pathname.startsWith("/comunidad") || pathname === "/ecommerce";
+    SPOTLIGHT_ROUTES.has(pathname) || pathname.startsWith("/comunidad") || pathname === "/ecommerce-floreria";
   if (!isMarketing) return null;
   return (
     // fallback={null} — canvas is decorative, never block render for it
@@ -61,7 +61,7 @@ const ClientOnboarding = lazy(() => import("./pages/ClientOnboarding"));
 const TrackerView     = lazy(() => import("./pages/TrackerView"));
 const ClientHub       = lazy(() => import("./pages/ClientHub"));
 const Regalos         = lazy(() => import("./pages/Regalos"));
-const Ecommerce       = lazy(() => import("./pages/Ecommerce"));
+const EcommerceFloreria = lazy(() => import("./pages/EcommerceFloreria"));
 import QRRedirect from "./pages/QRRedirect";
 
 // ─── QUERY CLIENT ─────────────────────────────────────────────────────────────
@@ -105,7 +105,7 @@ const App = () => (
                   <Route path="/onboarding/:token" element={<ClientOnboarding />} />
                   <Route path="/t/:token"          element={<TrackerView />} />
                   <Route path="/regalos"           element={<Regalos />} />
-                  <Route path="/ecommerce"         element={<Ecommerce />} />
+                  <Route path="/ecommerce-floreria"         element={<EcommerceFloreria />} />
 
                   {/* ── QR Dinámico redirect — DEBE ir antes del catch-all ── */}
                   <Route path="/r/:slug"           element={<QRRedirect />} />
