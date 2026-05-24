@@ -130,7 +130,34 @@ export function OrgDashboard({ project, multiProject, onBack, onSignOut, userEma
       const consentTotal = richEvents.filter(e => e.event_type === 'consent_granted' || e.event_type === 'consent_necessary_only').length;
       const consent_rate = consentTotal > 0 ? (consentGranted / consentTotal) * 100 : 0;
 
-      setAnalytics({ ...base, by_browser, by_event_type, by_referrer, scroll_50_rate, scroll_90_rate, rage_click_count, form_started_count, avg_time_on_page, consent_rate });
+      // Group and clean top_pages
+      const rawTopPages = (base.top_pages ?? []) as { url: string; count: number }[];
+      const cleanTopPagesMap: Record<string, number> = {};
+      rawTopPages.forEach(p => {
+        let cleanPath = p.url.replace(/^https?:\/\/[^/]+/, '').split('?')[0].split('#')[0];
+        if (cleanPath.length > 1 && cleanPath.endsWith('/')) {
+          cleanPath = cleanPath.slice(0, -1);
+        }
+        if (!cleanPath) cleanPath = '/';
+        cleanTopPagesMap[cleanPath] = (cleanTopPagesMap[cleanPath] || 0) + p.count;
+      });
+      const top_pages = Object.entries(cleanTopPagesMap)
+        .sort(([, a], [, b]) => b - a)
+        .map(([url, count]) => ({ url, count }));
+
+      setAnalytics({
+        ...base,
+        top_pages,
+        by_browser,
+        by_event_type,
+        by_referrer,
+        scroll_50_rate,
+        scroll_90_rate,
+        rage_click_count,
+        form_started_count,
+        avg_time_on_page,
+        consent_rate
+      });
     }
     if (snapshotsRes.data) setSnapshots(snapshotsRes.data as SiteSnapshot[]);
 
@@ -237,7 +264,14 @@ export function OrgDashboard({ project, multiProject, onBack, onSignOut, userEma
 
     // Atribución: leads por página
     const pageCount = leads.reduce((acc, l) => {
-      if (l.page_url) acc[l.page_url] = (acc[l.page_url] || 0) + 1;
+      if (l.page_url) {
+        let cleanPath = l.page_url.replace(/^https?:\/\/[^/]+/, '').split('?')[0].split('#')[0];
+        if (cleanPath.length > 1 && cleanPath.endsWith('/')) {
+          cleanPath = cleanPath.slice(0, -1);
+        }
+        if (!cleanPath) cleanPath = '/';
+        acc[cleanPath] = (acc[cleanPath] || 0) + 1;
+      }
       return acc;
     }, {} as Record<string, number>);
     const lByPage = Object.entries(pageCount)

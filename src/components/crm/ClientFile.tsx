@@ -24,7 +24,7 @@ interface Props {
   onRefresh: () => void;
 }
 
-type Tab = 'panorama' | 'trafico' | 'infraestructura' | 'reportes';
+type Tab = 'panorama' | 'trafico' | 'infraestructura' | 'reportes' | 'consola';
 
 const PLAN_OPTIONS = [
   { value: 'free',         label: 'Free — S/ 0/mes (cada 45d)', amount: 0 },
@@ -139,6 +139,7 @@ export function ClientFile({ client, onBack, onRefresh }: Props) {
     by_device: { device: string; count: number }[];
     by_country: { country: string; count: number }[];
     top_pages: { url: string; count: number }[];
+    by_city: { city: string; count: number }[];
     chartData: { date: string; label: string; leads: number; visits: number }[];
   }
   const [analytics, setAnalytics] = useState<RichAnalytics | null>(null);
@@ -237,13 +238,50 @@ export function ClientFile({ client, onBack, onRefresh }: Props) {
         return acc;
       }, {});
       const byPage = leads.reduce((acc: Record<string, number>, l: { page_url: string | null }) => {
-        if (l.page_url) acc[l.page_url] = (acc[l.page_url] ?? 0) + 1;
+        if (l.page_url) {
+          let cleanPath = l.page_url.replace(/^https?:\/\/[^/]+/, '').split('?')[0].split('#')[0];
+          if (cleanPath.length > 1 && cleanPath.endsWith('/')) {
+            cleanPath = cleanPath.slice(0, -1);
+          }
+          if (!cleanPath) cleanPath = '/';
+          acc[cleanPath] = (acc[cleanPath] ?? 0) + 1;
+        }
         return acc;
       }, {});
       const topPages = Object.entries(byPage).sort(([,a],[,b]) => b - a).slice(0,5).map(([page, count]) => ({ page, count }));
       
       const richEvents = (richEventsRes.data as any[]) || [];
       const analyticsData = (analyticsRes.data ?? {}) as any;
+
+      // Group and clean top_pages
+      const rawTopPages = (analyticsData.top_pages ?? []) as { url: string; count: number }[];
+      const cleanTopPagesMap: Record<string, number> = {};
+      rawTopPages.forEach(p => {
+        let cleanPath = p.url.replace(/^https?:\/\/[^/]+/, '').split('?')[0].split('#')[0];
+        if (cleanPath.length > 1 && cleanPath.endsWith('/')) {
+          cleanPath = cleanPath.slice(0, -1);
+        }
+        if (!cleanPath) cleanPath = '/';
+        cleanTopPagesMap[cleanPath] = (cleanTopPagesMap[cleanPath] || 0) + p.count;
+      });
+      const top_pages = Object.entries(cleanTopPagesMap)
+        .sort(([, a], [, b]) => b - a)
+        .map(([url, count]) => ({ url, count }));
+
+      // Cities from richEvents
+      const cityMap: Record<string, number> = {};
+      richEvents.forEach(e => {
+        if (e.city) {
+          const cName = e.city.trim();
+          if (cName && cName.toLowerCase() !== 'unknown') {
+            const formattedCity = cName.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+            cityMap[formattedCity] = (cityMap[formattedCity] || 0) + 1;
+          }
+        }
+      });
+      const by_city = Object.entries(cityMap)
+        .sort(([, a], [, b]) => b - a)
+        .map(([city, count]) => ({ city, count }));
 
       // Browsers
       const browserMap: Record<string, number> = {};
@@ -318,7 +356,8 @@ export function ClientFile({ client, onBack, onRefresh }: Props) {
         by_hour: analyticsData.by_hour ?? [],
         by_device: analyticsData.by_device ?? [],
         by_country: analyticsData.by_country ?? [],
-        top_pages: analyticsData.top_pages ?? [],
+        top_pages,
+        by_city,
         chartData,
       });
     }).catch(e => {
@@ -523,10 +562,11 @@ export function ClientFile({ client, onBack, onRefresh }: Props) {
         </div>
 
         {/* Tabs */}
-        <div className="flex gap-1 mt-5">
+        <div className="flex gap-1 mt-5 flex-wrap">
           {([
             { id: 'panorama',      label: 'Panorama',            icon: <BarChart3 size={13} /> },
             { id: 'trafico',       label: 'Tráfico & Visitas',   icon: <Globe size={13} /> },
+            { id: 'consola',       label: 'Consola Tracker',     icon: <Activity size={13} /> },
             { id: 'infraestructura', label: 'Infraestructura',   icon: <Server size={13} /> },
             { id: 'reportes',      label: 'Motor IA & Informes', icon: <Sparkles size={13} /> },
           ] as { id: Tab; label: string; icon: React.ReactNode }[]).map(t => (
@@ -829,21 +869,14 @@ export function ClientFile({ client, onBack, onRefresh }: Props) {
                         <div className="border-t border-border/50 pt-3">
                           <div className="text-[10px] font-mono text-muted-foreground uppercase mb-2">Top Ciudades</div>
                           <div className="space-y-1.5">
-                            {analytics.recentLeads.reduce((cities: { name: string; count: number }[], lead) => {
-                              if (lead.city) {
-                                const existing = cities.find(c => c.name === lead.city);
-                                if (existing) existing.count++;
-                                else cities.push({ name: lead.city, count: 1 });
-                              }
-                              return cities;
-                            }, []).sort((a, b) => b.count - a.count).slice(0, 4).map((c, i) => (
+                            {analytics.by_city.slice(0, 5).map((c, i) => (
                               <div key={i} className="flex items-center justify-between text-xs text-muted-foreground">
-                                <span className="flex items-center gap-1"><MapPin size={11} /> {c.name}</span>
+                                <span className="flex items-center gap-1"><MapPin size={11} /> {c.city}</span>
                                 <span className="font-bold text-foreground">{c.count}</span>
                               </div>
                             ))}
-                            {analytics.recentLeads.filter(l => l.city).length === 0 && (
-                              <p className="text-[10px] text-muted-foreground/60 italic">Sin datos de ciudades recientes</p>
+                            {analytics.by_city.length === 0 && (
+                              <p className="text-[10px] text-muted-foreground/60 italic">Sin datos de ciudades</p>
                             )}
                           </div>
                         </div>
@@ -1045,6 +1078,11 @@ export function ClientFile({ client, onBack, onRefresh }: Props) {
           </div>
         )}
 
+        {/* ══ CONSOLA TRACKER ══ */}
+        {tab === 'consola' && (
+          <TrackerConsole projId={proj?.id} />
+        )}
+
         {/* ══ MOTOR IA & REPORTES ══ */}
         {tab === 'reportes' && (
           <div className="space-y-6 max-w-2xl">
@@ -1162,6 +1200,213 @@ function ReportPreview({ report }: { report: MonthlyReport }) {
           </span>
         </div>
       ))}
+    </div>
+  );
+}
+
+interface TrackerConsoleProps {
+  projId?: string;
+}
+
+function TrackerConsole({ projId }: TrackerConsoleProps) {
+  const [events, setEvents] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [filter, setFilter] = useState<string>('all');
+  const [expandedEventId, setExpandedEventId] = useState<string | null>(null);
+
+  const fetchEvents = async () => {
+    if (!projId) return;
+    setLoading(true);
+    const { data, error } = await supabaseAdmin
+      .from('events')
+      .select('*')
+      .eq('organization_id', projId)
+      .order('created_at', { ascending: false })
+      .limit(100);
+    if (!error && data) {
+      setEvents(data);
+    } else if (error) {
+      console.error('Error fetching console events:', error);
+      toast.error('Error cargando eventos');
+    }
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    if (!projId) return;
+    fetchEvents();
+
+    const channel = supabase
+      .channel(`realtime-events-${projId}`)
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'events', filter: `organization_id=eq.${projId}` },
+        (payload) => {
+          setEvents(prev => [payload.new, ...prev].slice(0, 100));
+          toast.info('Nuevo evento recibido en la consola', { duration: 2000 });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [projId]);
+
+  const filteredEvents = events.filter(e => {
+    if (filter === 'all') return true;
+    if (filter === 'pageview') return e.event_type === 'pageview' || e.event_type === 'pageview_anonymous';
+    if (filter === 'scroll') return e.event_type.startsWith('scroll_');
+    if (filter === 'click') return e.event_type.startsWith('click_') || e.event_type === 'rage_click';
+    if (filter === 'forms') return e.event_type === 'form_started' || e.event_type === 'form_submitted';
+    return true;
+  });
+
+  const getEventBadge = (type: string) => {
+    switch (type) {
+      case 'pageview':
+      case 'pageview_anonymous':
+        return <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">Visita</span>;
+      case 'scroll_50':
+      case 'scroll_90':
+        return <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-500/10 text-blue-400 border border-blue-500/20">{type === 'scroll_50' ? 'Scroll 50%' : 'Scroll 90%'}</span>;
+      case 'click_cta':
+      case 'click':
+        return <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-purple-500/10 text-purple-400 border border-purple-500/20">Click CTA</span>;
+      case 'rage_click':
+        return <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-red-500/10 text-red-500 border border-red-500/20 animate-pulse">Rage Click</span>;
+      case 'form_started':
+        return <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-500/10 text-amber-500 border border-amber-500/20">Form Inicio</span>;
+      case 'form_submitted':
+        return <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-green-500/10 text-green-400 border border-green-500/20 font-bold">Form Envío</span>;
+      case 'session_leave':
+        return <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-gray-500/10 text-gray-400 border border-gray-500/20">Salida</span>;
+      default:
+        return <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-gray-500/10 text-gray-400 border border-gray-500/20">{type}</span>;
+    }
+  };
+
+  return (
+    <div className="space-y-4 max-w-4xl">
+      <div className="bg-card border border-border rounded-xl p-5">
+        <div className="flex items-center justify-between flex-wrap gap-4 mb-2">
+          <div>
+            <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+              <Activity size={15} className="text-primary animate-pulse" /> Consola de Eventos en Tiempo Real
+            </h3>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Monitorea los eventos capturados en vivo desde el sitio web del cliente.
+            </p>
+          </div>
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-1.5 text-xs text-emerald-500 bg-emerald-500/5 px-2.5 py-1 border border-emerald-500/10 rounded-full font-medium">
+              <span className="h-1.5 w-1.5 bg-emerald-500 rounded-full animate-ping" />
+              Tiempo Real Activo
+            </div>
+            <button
+              onClick={fetchEvents}
+              disabled={loading}
+              className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-muted text-xs text-muted-foreground hover:text-foreground transition-all"
+            >
+              <RefreshCw size={11} className={loading ? 'animate-spin' : ''} />
+              Refrescar
+            </button>
+          </div>
+        </div>
+
+        {/* Filters */}
+        <div className="flex gap-1.5 flex-wrap py-3 border-t border-b border-border/50 my-4">
+          {[
+            { id: 'all', label: 'Todos' },
+            { id: 'pageview', label: 'Visitas' },
+            { id: 'scroll', label: 'Scroll' },
+            { id: 'click', label: 'Clicks' },
+            { id: 'forms', label: 'Formularios' },
+          ].map(f => (
+            <button
+              key={f.id}
+              onClick={() => setFilter(f.id)}
+              className={`px-3 py-1 rounded-lg text-xs transition-colors ${
+                filter === f.id ? 'bg-primary/10 text-primary border border-primary/20' : 'bg-muted/30 text-muted-foreground hover:bg-muted hover:text-foreground border border-transparent'
+              }`}
+            >
+              {f.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Events list */}
+        {filteredEvents.length === 0 ? (
+          <div className="text-center py-12 text-muted-foreground/40 font-mono text-xs">
+            {loading ? 'Cargando eventos...' : 'No se detectaron eventos con el filtro seleccionado.'}
+          </div>
+        ) : (
+          <div className="border border-border/60 rounded-xl overflow-hidden divide-y divide-border/40 bg-muted/5">
+            <div className="grid grid-cols-12 gap-2 px-4 py-2.5 bg-muted/35 text-[10px] font-mono text-muted-foreground uppercase tracking-wider">
+              <div className="col-span-2">Hora</div>
+              <div className="col-span-2">Evento</div>
+              <div className="col-span-4">Ruta</div>
+              <div className="col-span-2">Ubicación</div>
+              <div className="col-span-2 text-right">Dispositivo</div>
+            </div>
+
+            {filteredEvents.map(e => {
+              const date = new Date(e.created_at);
+              const timeStr = date.toLocaleTimeString('es-PE', { hour12: false });
+              const isExpanded = expandedEventId === e.id;
+              const path = e.page_url ? e.page_url.replace(/^https?:\/\/[^/]+/, '') || '/' : '/';
+              const flag = e.country === 'PE' ? '🇵🇪' : e.country === 'US' ? '🇺🇸' : e.country === 'ES' ? '🇪🇸' : e.country === 'MX' ? '🇲🇽' : e.country === 'CO' ? '🇨🇴' : e.country === 'AR' ? '🇦🇷' : '🌐';
+              const locationStr = e.city ? `${flag} ${e.city}` : e.country ? `${flag} ${e.country}` : 'Desconocido';
+              const deviceStr = e.device ? `${e.device.charAt(0).toUpperCase() + e.device.slice(1)}` : 'Desconocido';
+
+              return (
+                <div key={e.id} className="transition-all">
+                  <div
+                    onClick={() => setExpandedEventId(isExpanded ? null : e.id)}
+                    className="grid grid-cols-12 gap-2 px-4 py-3 text-xs items-center hover:bg-muted/20 cursor-pointer select-none"
+                  >
+                    <div className="col-span-2 font-mono text-muted-foreground">{timeStr}</div>
+                    <div className="col-span-2">{getEventBadge(e.event_type)}</div>
+                    <div className="col-span-4 font-mono truncate text-foreground/80 pr-2" title={e.page_url}>{path}</div>
+                    <div className="col-span-2 truncate">{locationStr}</div>
+                    <div className="col-span-2 text-right text-muted-foreground truncate">{deviceStr}</div>
+                  </div>
+
+                  {isExpanded && (
+                    <div className="px-4 py-3 bg-muted/10 border-t border-border/30 text-[11px] space-y-2.5 font-mono">
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <span className="text-muted-foreground">ID de Evento:</span> <span className="text-foreground">{e.id}</span>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">ID de Sesión:</span> <span className="text-foreground">{e.session_id || 'N/A'}</span>
+                        </div>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Referrer:</span> <span className="text-foreground">{e.referrer || 'Directo'}</span>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">URL Completa:</span> <span className="text-foreground text-sky-400 break-all">{e.page_url}</span>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Navegador:</span> <span className="text-foreground">{e.browser || 'N/A'}</span>
+                      </div>
+                      {e.metadata && Object.keys(e.metadata).length > 0 && (
+                        <div>
+                          <span className="text-muted-foreground">Metadata del Evento:</span>
+                          <pre className="mt-1 p-2 bg-muted border border-border/40 rounded-lg text-[10px] text-foreground overflow-x-auto whitespace-pre">
+                            {JSON.stringify(e.metadata, null, 2)}
+                          </pre>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
