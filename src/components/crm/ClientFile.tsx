@@ -1217,12 +1217,24 @@ function TrackerConsole({ projId }: TrackerConsoleProps) {
   const fetchEvents = async () => {
     if (!projId) return;
     setLoading(true);
-    const { data, error } = await supabaseAdmin
+    let query = supabaseAdmin
       .from('events')
       .select('*')
       .eq('organization_id', projId)
-      .order('created_at', { ascending: false })
-      .limit(100);
+      .order('created_at', { ascending: false });
+
+    // Apply database-side filtering
+    if (filter === 'pageview') {
+      query = query.in('event_type', ['pageview', 'pageview_anonymous']);
+    } else if (filter === 'scroll') {
+      query = query.like('event_type', 'scroll_%');
+    } else if (filter === 'click') {
+      query = query.in('event_type', ['click_cta', 'click', 'rage_click']);
+    } else if (filter === 'forms') {
+      query = query.in('event_type', ['form_started', 'form_submitted']);
+    }
+
+    const { data, error } = await query.limit(100);
     if (!error && data) {
       setEvents(data);
     } else if (error) {
@@ -1242,8 +1254,20 @@ function TrackerConsole({ projId }: TrackerConsoleProps) {
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'events', filter: `organization_id=eq.${projId}` },
         (payload) => {
-          setEvents(prev => [payload.new, ...prev].slice(0, 100));
-          toast.info('Nuevo evento recibido en la consola', { duration: 2000 });
+          const newEvent = payload.new as any;
+          
+          // Check if it matches the current filter before adding it to state
+          let matches = false;
+          if (filter === 'all') matches = true;
+          else if (filter === 'pageview' && (newEvent.event_type === 'pageview' || newEvent.event_type === 'pageview_anonymous')) matches = true;
+          else if (filter === 'scroll' && newEvent.event_type.startsWith('scroll_')) matches = true;
+          else if (filter === 'click' && (newEvent.event_type === 'click_cta' || newEvent.event_type === 'click' || newEvent.event_type === 'rage_click')) matches = true;
+          else if (filter === 'forms' && (newEvent.event_type === 'form_started' || newEvent.event_type === 'form_submitted')) matches = true;
+
+          if (matches) {
+            setEvents(prev => [newEvent, ...prev].slice(0, 100));
+            toast.info(`Nuevo evento (${newEvent.event_type}) recibido en la consola`, { duration: 2000 });
+          }
         }
       )
       .subscribe();
@@ -1251,16 +1275,7 @@ function TrackerConsole({ projId }: TrackerConsoleProps) {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [projId]);
-
-  const filteredEvents = events.filter(e => {
-    if (filter === 'all') return true;
-    if (filter === 'pageview') return e.event_type === 'pageview' || e.event_type === 'pageview_anonymous';
-    if (filter === 'scroll') return e.event_type.startsWith('scroll_');
-    if (filter === 'click') return e.event_type.startsWith('click_') || e.event_type === 'rage_click';
-    if (filter === 'forms') return e.event_type === 'form_started' || e.event_type === 'form_submitted';
-    return true;
-  });
+  }, [projId, filter]);
 
   const getEventBadge = (type: string) => {
     switch (type) {
@@ -1336,7 +1351,7 @@ function TrackerConsole({ projId }: TrackerConsoleProps) {
         </div>
 
         {/* Events list */}
-        {filteredEvents.length === 0 ? (
+        {events.length === 0 ? (
           <div className="text-center py-12 text-muted-foreground/40 font-mono text-xs">
             {loading ? 'Cargando eventos...' : 'No se detectaron eventos con el filtro seleccionado.'}
           </div>
@@ -1350,7 +1365,7 @@ function TrackerConsole({ projId }: TrackerConsoleProps) {
               <div className="col-span-2 text-right">Dispositivo</div>
             </div>
 
-            {filteredEvents.map(e => {
+            {events.map(e => {
               const date = new Date(e.created_at);
               const timeStr = date.toLocaleTimeString('es-PE', { hour12: false });
               const isExpanded = expandedEventId === e.id;
