@@ -1343,7 +1343,7 @@ function TrackerConsole({ projId }: TrackerConsoleProps) {
         ) : (
           <div className="border border-border/60 rounded-xl overflow-hidden divide-y divide-border/40 bg-muted/5">
             <div className="grid grid-cols-12 gap-2 px-4 py-2.5 bg-muted/35 text-[10px] font-mono text-muted-foreground uppercase tracking-wider">
-              <div className="col-span-2">Hora</div>
+              <div className="col-span-2">Fecha / Hora</div>
               <div className="col-span-2">Evento</div>
               <div className="col-span-4">Ruta</div>
               <div className="col-span-2">Ubicación</div>
@@ -1365,7 +1365,10 @@ function TrackerConsole({ projId }: TrackerConsoleProps) {
                     onClick={() => setExpandedEventId(isExpanded ? null : e.id)}
                     className="grid grid-cols-12 gap-2 px-4 py-3 text-xs items-center hover:bg-muted/20 cursor-pointer select-none"
                   >
-                    <div className="col-span-2 font-mono text-muted-foreground">{timeStr}</div>
+                    <div className="col-span-2 font-mono text-muted-foreground text-[10.5px] leading-tight">
+                      <div className="font-semibold text-foreground/80">{date.toLocaleDateString('es-PE', { day: '2-digit', month: 'short' })}</div>
+                      <div className="text-[9.5px] text-muted-foreground/60">{timeStr}</div>
+                    </div>
                     <div className="col-span-2">{getEventBadge(e.event_type)}</div>
                     <div className="col-span-4 font-mono truncate text-foreground/80 pr-2" title={e.page_url}>{path}</div>
                     <div className="col-span-2 truncate">{locationStr}</div>
